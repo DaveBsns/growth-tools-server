@@ -3,6 +3,32 @@ import mongoose, { Document, Types } from 'mongoose';
 
 export type UserDocument = User & Document;
 
+@Schema({ _id: false })
+export class MatchingProfile {
+    @Prop({ type: [String], default: [] })
+    hobbies: string[];
+
+    @Prop({ type: [String], default: [] })
+    interests: string[];
+
+    @Prop({ required: false })
+    motherTongue: string;
+
+    @Prop({ required: false })
+    learningLanguage: string;
+
+    @Prop({ required: false })
+    semester: number;
+
+    @Prop({ required: false })
+    courseOfStudy: string;
+
+    @Prop({ type: [String], default: [] })
+    availableDays: string[];
+}
+
+export const MatchingProfileSchema = SchemaFactory.createForClass(MatchingProfile);
+
 @Schema({ timestamps: true })
 export class User {
     @Prop({ required: true })
@@ -63,6 +89,9 @@ export class User {
 
     @Prop({ type: Boolean, default: false, select: false })
     isMockData: boolean;
+
+    @Prop({ type: MatchingProfileSchema, required: false })
+    matchingProfile?: MatchingProfile;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

@@ -28,6 +28,7 @@ import { RequestIosAccessSchema } from './shared/schemas/request_ios_access.sche
 import { SurveySchema } from './shared/schemas/survey.schema';
 import { EvaluationModule } from './evaluation/evaluation.module';
 import { UsersService } from './users/user/services/user.service';
+import { MatchingModule } from './matching/matching.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { UsersService } from './users/user/services/user.service';
     BugReportModule,
     RecommendationModule,
     EvaluationModule,
+    MatchingModule,
   ],
   controllers: [AppController],
   providers: [

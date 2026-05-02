@@ -3,6 +3,19 @@ import mongoose, { Document, Types } from 'mongoose';
 
 export type UserDocument = User & Document;
 
+export type LanguageLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | 'native';
+
+@Schema({ _id: false })
+export class LanguageSkill {
+    @Prop({ required: true, trim: true, lowercase: true })
+    language: string;
+
+    @Prop({ required: true, enum: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'native'] })
+    level: LanguageLevel;
+}
+
+export const LanguageSkillSchema = SchemaFactory.createForClass(LanguageSkill);
+
 @Schema({ _id: false })
 export class MatchingProfile {
     @Prop({ type: [String], default: [] })
@@ -10,6 +23,12 @@ export class MatchingProfile {
 
     @Prop({ type: [String], default: [] })
     interests: string[];
+
+    @Prop({ type: [LanguageSkillSchema], default: [] })
+    spokenLanguages: LanguageSkill[];
+
+    @Prop({ type: [LanguageSkillSchema], default: [] })
+    learningLanguages: LanguageSkill[];
 
     @Prop({ required: false })
     motherTongue: string;

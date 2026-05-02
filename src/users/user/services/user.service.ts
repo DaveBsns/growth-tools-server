@@ -645,6 +645,7 @@ export class UsersService {
       username: updateUserDto.username,
       profilePicture: updateUserDto.profilePicture,
       recoveryEmail: updateUserDto.recoveryEmail,
+      ...(updateUserDto.matchingProfile !== undefined && { matchingProfile: updateUserDto.matchingProfile }),
       // TODO is SH: Allow updating overview via profile settings
       ...(updateUserDto.overview !== undefined && { overview: updateUserDto.overview }),
     });

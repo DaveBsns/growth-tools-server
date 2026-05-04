@@ -61,6 +61,7 @@ mkdir env/ # create env folder
 cd env/ # change directory
 touch development.env # create development env file
 touch production.env # create production env file
+touch staging.env # create staging env file
 ```
 
 Now you have to add these lines into your env files based on your data
@@ -140,6 +141,7 @@ mkdir env/ # create env folder
 cd env/ # change directory
 touch development.env # create development env file
 touch production.env # create production env file
+touch staging.env # create staging env file
 ```
 
 Now you have to add these lines into your env files based on your data

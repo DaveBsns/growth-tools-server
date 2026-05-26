@@ -48,6 +48,23 @@ export class MatchingProfile {
 
 export const MatchingProfileSchema = SchemaFactory.createForClass(MatchingProfile);
 
+@Schema({ _id: false })
+export class MatchingResultRef {
+    @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true })
+    partnerId: Types.ObjectId;
+
+    @Prop({ required: true })
+    score: number;
+
+    @Prop({ required: false })
+    rank?: number;
+
+    @Prop({ required: false })
+    llmSummary?: string;
+}
+
+export const MatchingResultRefSchema = SchemaFactory.createForClass(MatchingResultRef);
+
 @Schema({ timestamps: true })
 export class User {
     @Prop({ required: true })
@@ -111,6 +128,9 @@ export class User {
 
     @Prop({ type: MatchingProfileSchema, required: false })
     matchingProfile?: MatchingProfile;
+
+    @Prop({ type: [MatchingResultRefSchema], default: [] })
+    matchingResults?: MatchingResultRef[];
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

@@ -31,12 +31,6 @@ export class MatchingProfile {
     learningLanguages: LanguageSkill[];
 
     @Prop({ required: false })
-    motherTongue: string;
-
-    @Prop({ required: false })
-    learningLanguage: string;
-
-    @Prop({ required: false })
     semester: number;
 
     @Prop({ required: false })

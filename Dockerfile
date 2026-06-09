@@ -12,6 +12,6 @@ COPY config/env/staging.env staging.env
 
 RUN npm run build
 
-EXPOSE 9000
+EXPOSE 7000
 
 CMD ["npm", "run" ,"start:prod"]

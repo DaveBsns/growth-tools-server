@@ -71,7 +71,7 @@ export class MatchingService {
     const currentSpokenLanguages = this.getSpokenLanguages(currentProfile);
     const currentCommunicationLanguages = this.getGoodSpokenLanguageSkills(currentProfile);
 
-    return potentialPartners
+    const scoredPartners = potentialPartners
       .map((partner) => {
         const partnerProfile = partner.matchingProfile as MatchingProfileLike;
         const spokenMatches = this.getGoodSpokenLanguageMatches(partnerProfile, languagesToLearn);
@@ -112,6 +112,17 @@ export class MatchingService {
       })
       .filter((partner) => partner.matchedLanguages.length > 0)
       .sort((a, b) => b.matchScore - a.matchScore);
+
+    const matchingResults = scoredPartners.map((partner) => ({
+      partnerId: partner._id,
+      score: partner.matchScore,
+    }));
+
+    await this.userModel.findByIdAndUpdate(userId, {
+      $set: { matchingResults },
+    });
+
+    return scoredPartners;
   }
 
   private getLearningLanguages(profile?: MatchingProfileLike): string[] {

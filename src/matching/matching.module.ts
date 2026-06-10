@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { MatchingController } from './matching.controller';
 import { MatchingService } from './matching.service';
@@ -12,6 +13,7 @@ import { AuthService } from '../auth/auth.service';
   imports: [
     MongooseModule.forFeature([{ name: 'User', schema: UserSchema }]),
     AuthModule,
+    ConfigModule,
   ],
   controllers: [MatchingController, MatchingStep2Controller],
   providers: [MatchingService, MatchingStep2Service, AuthService],

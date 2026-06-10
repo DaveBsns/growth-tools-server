@@ -23,7 +23,7 @@ export class MatchingService {
     "C2",
     "native",
   ];
-  private readonly communicationLanguageBonus = 3;
+  private readonly communicationLanguageBonus = 10;
   private readonly mutualLearningBonus = 2;
   private readonly sharedInterestBonus = 3;
   private readonly sharedTagBonus = 2;
@@ -107,10 +107,9 @@ export class MatchingService {
             0
           ) +
           mutualLearningMatches.length * this.mutualLearningBonus +
-          commonCommunicationLanguages.reduce(
-            (sum, match) => sum + match.score,
-            0
-          ) +
+          (commonCommunicationLanguages.length > 0
+            ? this.communicationLanguageBonus
+            : 0) +
           sharedInterests.length * this.sharedInterestBonus +
           sharedInterestedTags.length * this.sharedTagBonus +
           sharedInterestedCourses.length * this.sharedCourseBonus +
@@ -128,12 +127,7 @@ export class MatchingService {
           sharedStudyPrograms,
         };
       })
-      .filter((partner) => {
-        return (
-          partner.matchedLanguages.length > 0 &&
-          partner.commonCommunicationLanguages.length > 0
-        );
-      })
+      .filter((partner) => partner.matchedLanguages.length > 0)
       .sort((a, b) => b.matchScore - a.matchScore);
 
     const matchingResults = scoredPartners.map((partner) => ({
@@ -208,16 +202,10 @@ export class MatchingService {
           return null;
         }
 
-        const sharedLevelScore = Math.min(
-          this.levelScores[currentLanguage.level],
-          this.levelScores[partnerLanguage.level]
-        );
-
         return {
           language: currentLanguage.language,
           currentUserLevel: currentLanguage.level,
           partnerLevel: partnerLanguage.level,
-          score: sharedLevelScore + this.communicationLanguageBonus,
         };
       })
       .filter(Boolean);

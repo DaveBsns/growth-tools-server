@@ -1,44 +1,120 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EvaluationService } from 'src/evaluation/evaluation.service';
+import { RecommendationService } from 'src/recommendations/recommendation.service';
 
+// Currently not in use 
 @Injectable()
 export class ChatService {
 
   constructor(
     private configService: ConfigService,
+    private evaluationService: EvaluationService,
+    private recommendationService: RecommendationService,
   ) { }
 
-  async sendMessageToBot(message: string): Promise<any> {
-    // Example of calling your Python chatbot service
-
-    const response = await fetch(this.configService.get<string>('chatbot.url'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 'message': message }),
-    });
-
-    // Check if the response is OK (status code 2xx)
-    if (!response.ok) {
-      throw new Error(`Failed to fetch from Python chatbot: ${response.statusText}`);
+  private logDebugInfo(stage: string, data: any): void {
+    console.log(`=== CHATBOT DEBUG [${stage}] ===`);
+    if (typeof data === 'object') {
+      console.log(JSON.stringify(data, null, 2));
+    } else {
+      console.log(data);
     }
+  }
 
-    // Parse the response as JSON
-    const data = await response.json();
-    const decoded = await JSON.parse(data.response);
-    
-    // Ensure the response has the expected structure and includes the "output" key inside "response"
-    if (!decoded || !decoded.message) {
-      throw new Error('Invalid response format from Python chatbot');
+  private logError(error: any): void {
+    console.error('=== CHATBOT ERROR ===');
+    console.error('Error type:', error.constructor?.name || 'Unknown');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Full error:', error);
+  }
+
+  async sendMessageToBot(
+    message: string,
+    firstName?: string,
+    lastName?: string,
+    userId?: string
+  ): Promise<any> {
+    const startTime = Date.now();
+    console.log("STARTTIME: ",startTime)
+    try {
+      const chatURL = this.configService.get<string>('chatbot.url');
+      
+      this.logDebugInfo('REQUEST', {
+        url: chatURL,
+        message: message,
+        body: { message: message }
+      });
+
+      const response = await fetch(chatURL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 'message': message }),
+      });
+
+      this.logDebugInfo('RESPONSE', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logDebugInfo('ERROR_RESPONSE_BODY', errorText);
+        throw new Error(`Failed to fetch from Python chatbot: ${response.statusText}`);
+      }
+
+      const rawData = await response.text();
+      this.logDebugInfo('RAW_DATA', rawData);
+
+      const data = JSON.parse(rawData);
+      this.logDebugInfo('PARSED_DATA', data);
+
+      const decoded = await JSON.parse(data.response);
+      this.logDebugInfo('DECODED_RESPONSE', decoded);
+
+      if (!decoded || !decoded.message) {
+        throw new Error('Invalid response format from Python chatbot');
+      }
+
+      const result = {
+        message: decoded.message,
+        projects: decoded.projects || [],
+        users: decoded.users || []
+      };
+
+      this.logDebugInfo('FINAL_RESULT', {
+        message: result.message,
+        projectCount: result.projects.length,
+        projects: result.projects,
+        userCount: result.users.length
+      });
+
+      // Speichere Chatbot-Projekte im Cache
+      if (userId && result.projects.length > 0) {
+        const projectIds = result.projects.map(p => p._id || p.id).filter(id => id);
+        if (projectIds.length > 0) {
+          this.recommendationService.setChatbotProjects(userId, projectIds);
+        }
+      }
+
+      // Calculate and log response time
+      const responseTime = Date.now() - startTime;
+      console.log("Responsetime: ",responseTime)
+      await this.evaluationService.logChatResponseTime(
+        responseTime,
+        message,
+        firstName,
+        lastName,
+        userId
+      );
+      
+
+      return result;
+    } catch(error) {
+      this.logError(error);
+      return 'There was an error processing your request. Please try again later.';
     }
-
-    return {
-      message: decoded.message,
-      projects: decoded.projects || [],
-      users: decoded.users || []
-    };
-  } catch(error) {
-    // Handle errors (e.g., network issues, invalid response formats, etc.)
-    console.error('Error communicating with Python chatbot:', error);
-    return 'There was an error processing your request. Please try again later.';
   }
 }

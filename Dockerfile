@@ -8,8 +8,6 @@ RUN npm install
 
 COPY . .
 
-COPY config/env/staging.env staging.env
-
 RUN npm run build
 
 EXPOSE 7000

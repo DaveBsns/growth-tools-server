@@ -1,0 +1,81 @@
+import { Controller, Get, Query, Headers, UseGuards } from "@nestjs/common";
+import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger";
+import { RecommendationService } from "../../recommendation.service";
+import { JwtAuthGuard } from "../../../auth/jwt.guard";
+import { RecommendationQueryDto } from "../dtos/recommendation-query.dto";
+
+@ApiTags("Recommendations")
+@Controller("recommendations")
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth("JWT-auth")
+export class RecommendationController {
+  constructor(private readonly recommendationService: RecommendationService) {}
+
+  @Get("basic")
+  @ApiOperation({
+    summary: "Get basic filtered recommendations",
+    description:
+      "Returns projects matching user's interested tags and courses (simple filtering)",
+  })
+  async getBasicRecommendations(
+    @Headers("Authorization") token: string,
+    @Query() query: RecommendationQueryDto
+  ) {
+    return this.recommendationService.getBasicRecommendations(
+      token,
+      query.id
+      // query.page,
+      // query.limit,
+    );
+  }
+
+
+  @Get("content-based")
+  @ApiOperation({
+    summary: 'Get personalized content-based recommendations',
+    description:
+      "Returns personalized project recommendations based on content-based filtering (user interests)",
+  })
+  async getContentBasedRecommendations(
+    @Headers("Authorization") token: string,
+    @Query() query: RecommendationQueryDto
+  ) {
+    return this.recommendationService.getContentBasedRecommendations(
+      token,
+      query.id
+      // query.page,
+      // query.limit,
+    );
+  }
+
+  @Get('collaborative')
+  async getCollaborativeRecommendations(
+    @Headers('Authorization') token: string,
+    @Query() query: RecommendationQueryDto,
+  ) {
+    return this.recommendationService.getCollaborativeRecommendations(
+      token,
+      query.id,
+      // query.page,
+      // query.limit,
+    );
+  }
+
+  @Get("hybrid")
+  @ApiOperation({
+    summary: "Get hybrid recommendations",
+    description:
+      "Returns recommendations combining content-based filtering with popularity metrics",
+  })
+  async getHybridRecommendations(
+    @Headers("Authorization") token: string,
+    @Query() query: RecommendationQueryDto
+  ) {
+    return this.recommendationService.getHybridRecommendations(
+      token,
+      query.id
+      // query.page,
+      // query.limit,
+    );
+  }
+}

@@ -22,9 +22,12 @@ import { AuthService } from './auth/auth.service';
 import { SeedingModule } from './seeding/seeding.module';
 import { ArchiveModule } from './archives/archive.module';
 import { BugReportModule } from './bug-report/bug-report.module';
+import { RecommendationModule } from './recommendations/recommendation.module';
 import { UserStatusMiddleware } from './shared/middlewares/user_status_mw';
 import { RequestIosAccessSchema } from './shared/schemas/request_ios_access.schema';
 import { SurveySchema } from './shared/schemas/survey.schema';
+import { EvaluationModule } from './evaluation/evaluation.module';
+import { UsersService } from './users/user/services/user.service';
 
 @Module({
   imports: [
@@ -58,6 +61,8 @@ import { SurveySchema } from './shared/schemas/survey.schema';
     SeedingModule,
     ArchiveModule,
     BugReportModule,
+    RecommendationModule,
+    EvaluationModule,
   ],
   controllers: [AppController],
   providers: [
@@ -65,7 +70,9 @@ import { SurveySchema } from './shared/schemas/survey.schema';
     ChatGateway,
     ChatService,
     AuthService,
+    UsersService,
   ],
+  exports: [RecommendationModule],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

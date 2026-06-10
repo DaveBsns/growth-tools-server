@@ -7,6 +7,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - ai-testing.env
     volumes:
       - ./uploads:/app/uploads
     ports:

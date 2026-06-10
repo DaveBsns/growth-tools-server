@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "prebuild": "node -e \"const fs = require('fs'); if (!fs.existsSync('uploads')) { fs.mkdirSync('uploads'); }\"",
-    "build": "nest build && node -e \"const fs = require('fs'); const path = require('path'); if (!fs.existsSync('dist/config/env')) { fs.mkdirSync('dist/config/env', {recursive: true}); } fs.copyFileSync('config/env/staging.env', 'dist/config/env/staging.env');\"",
+    "build": "nest build",
     "postbuild": "ncp uploads dist/uploads",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
@@ -60,7 +60,7 @@
     "@types/supertest": "^2.0.11",
     "@typescript-eslint/eslint-plugin": "^5.0.0",
     "@typescript-eslint/parser": "^5.0.0",
-    "cross-env": "^10.1.0",
+    "cross-env": "10.1.0",
     "eslint": "^8.0.1",
     "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-prettier": "^4.0.0",

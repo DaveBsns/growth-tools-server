@@ -1,8 +1,9 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  backend-ai:
-    container_name: backend-ai
+  # Backend Service
+  backend-growth-dev:
+    container_name: backend-growth-dev
     build:
       context: .
       dockerfile: Dockerfile
@@ -13,22 +14,23 @@ services:
     ports:
       - "7000:7000"
     depends_on:
-      - db-mongo-ai
+      - db-mongo-growth-dev
     networks:
-      - server-network-ai
+      - server-network-growth-dev
 
-  db-mongo-ai:
-    container_name: db-mongo-ai
+  # MongoDB Service
+  db-mongo-growth-dev:
+    container_name: db-mongo-growth-dev
     image: mongo
     volumes:
-      - mongo-data-ai:/data/db
+      - mongo-data-growth-dev:/data/db
     restart: unless-stopped
     networks:
-      - server-network-ai
-      
+      - server-network-growth-dev
+
 volumes:
-  mongo-data-ai:
+  mongo-data-growth-dev:
 
 networks:
-  server-network-ai:
+  server-network-growth-dev:
     driver: bridge

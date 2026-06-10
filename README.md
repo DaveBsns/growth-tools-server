@@ -43,11 +43,11 @@ Setup the project by running below steps
 
 STEP 1
 ```bash
-git clone https://github.com/HHN/idealize_server.git # fetch the project from GitHub
+git clone https://github.com/HHN/growth-tools-server.git # fetch the project from GitHub
 ```
 
 ```bash
-cd idealize_server/ # go to the project's root folder
+cd growth-tools-server/ # go to the project's root folder
 ```
 
 ```bash
@@ -58,8 +58,10 @@ chmod +x uploads/ # grant full access to uploads/ folder
 ```bash
 cd config/ # go to config/ folder
 mkdir env/ # create env folder
+cd env/ # change directory
 touch development.env # create development env file
 touch production.env # create production env file
+touch staging.env # create staging env file
 ```
 
 Now you have to add these lines into your env files based on your data
@@ -156,8 +158,10 @@ chmod +x uploads/ # grant full access to uploads/ folder
 ```bash
 cd config/ # go to config/ folder
 mkdir env/ # create env folder
+cd env/ # change directory
 touch development.env # create development env file
 touch production.env # create production env file
+touch staging.env # create staging env file
 ```
 
 Now you have to add these lines into your env files based on your data

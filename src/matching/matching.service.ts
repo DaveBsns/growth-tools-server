@@ -2,10 +2,11 @@ import { Injectable } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { LanguageLevel, LanguageSkill, UserDocument } from "../users/user/schemas/user.schema";
+import { SbertService } from "./sbert.service";
 
 type MatchingProfileLike = {
   hobbies?: string[];
-  interests?: string[];
+  interests?: string;
   spokenLanguages?: LanguageSkill[];
   learningLanguages?: LanguageSkill[];
 };
@@ -25,10 +26,12 @@ export class MatchingService {
   ];
   private readonly communicationLanguageBonus = 10;
   private readonly mutualLearningBonus = 2;
-  private readonly sharedInterestBonus = 3;
   private readonly sharedTagBonus = 2;
   private readonly sharedCourseBonus = 2;
   private readonly sharedStudyProgramBonus = 2;
+  // SBERT similarity is 0..1; multiplied by these factors to keep impact low
+  private readonly hobbySemanticMaxBonus = 3;
+  private readonly interestSemanticMaxBonus = 2;
 
   private readonly levelScores: Record<LanguageLevel, number> = {
     A1: 1,
@@ -40,7 +43,10 @@ export class MatchingService {
     native: 7,
   };
 
-  constructor(@InjectModel("User") private userModel: Model<UserDocument>) {}
+  constructor(
+    @InjectModel("User") private userModel: Model<UserDocument>,
+    private readonly sbertService: SbertService,
+  ) {}
 
   async findPotentialPartners(userId: string) {
     const currentUser = await this.userModel.findById(userId).lean().exec();
@@ -57,36 +63,35 @@ export class MatchingService {
     }
 
     const potentialPartners = await this.userModel.find({
-        _id: { $ne: userId },
-        status: true,
-        softDeleted: false,
-        isBlockedByAdmin: false,
-        "matchingProfile.spokenLanguages": {
-          $elemMatch: {
-            language: { $in: languagesToLearn },
-            level: { $in: this.goodSpokenLevels },
-          },
+      _id: { $ne: userId },
+      status: true,
+      softDeleted: false,
+      isBlockedByAdmin: false,
+      "matchingProfile.spokenLanguages": {
+        $elemMatch: {
+          language: { $in: languagesToLearn },
+          level: { $in: this.goodSpokenLevels },
         },
+      },
     }).lean().exec();
 
     const currentSpokenLanguages = this.getSpokenLanguages(currentProfile);
     const currentCommunicationLanguages = this.getGoodSpokenLanguageSkills(currentProfile);
+    const currentHobbyText = this.buildHobbyText(currentProfile.hobbies);
+    const currentInterestText = this.buildInterestText(currentProfile.interests, currentUser.overview);
 
-    const scoredPartners = potentialPartners
-      .map((partner) => {
+    const scoredPartners = await Promise.all(
+      potentialPartners.map(async (partner) => {
         const partnerProfile = partner.matchingProfile as MatchingProfileLike;
+
         const spokenMatches = this.getGoodSpokenLanguageMatches(partnerProfile, languagesToLearn);
 
         const mutualLearningMatches = this.getLearningLanguages(partnerProfile)
           .filter((language) => currentSpokenLanguages.includes(language));
 
         const commonCommunicationLanguages = this.getCommonCommunicationLanguages(
-            currentCommunicationLanguages,
-            this.getGoodSpokenLanguageSkills(partnerProfile)
-        );
-        const sharedInterests = this.getSharedProfileInterests(
-          currentProfile,
-          partnerProfile
+          currentCommunicationLanguages,
+          this.getGoodSpokenLanguageSkills(partnerProfile)
         );
         const sharedInterestedTags = this.getSharedObjectIds(
           currentUser.interestedTags,
@@ -101,19 +106,23 @@ export class MatchingService {
           partner.studyPrograms
         );
 
+        const partnerHobbyText = this.buildHobbyText(partnerProfile.hobbies);
+        const partnerInterestText = this.buildInterestText(partnerProfile.interests, partner.overview);
+
+        const [hobbySemanticSimilarity, interestSemanticSimilarity] = await Promise.all([
+          this.sbertService.computeSimilarity(currentHobbyText, partnerHobbyText),
+          this.sbertService.computeSimilarity(currentInterestText, partnerInterestText),
+        ]);
+
         const score =
-          spokenMatches.reduce(
-            (sum, match) => sum + this.levelScores[match.level],
-            0
-          ) +
+          spokenMatches.reduce((sum, match) => sum + this.levelScores[match.level], 0) +
           mutualLearningMatches.length * this.mutualLearningBonus +
-          (commonCommunicationLanguages.length > 0
-            ? this.communicationLanguageBonus
-            : 0) +
-          sharedInterests.length * this.sharedInterestBonus +
+          (commonCommunicationLanguages.length > 0 ? this.communicationLanguageBonus : 0) +
           sharedInterestedTags.length * this.sharedTagBonus +
           sharedInterestedCourses.length * this.sharedCourseBonus +
-          sharedStudyPrograms.length * this.sharedStudyProgramBonus;
+          sharedStudyPrograms.length * this.sharedStudyProgramBonus +
+          hobbySemanticSimilarity * this.hobbySemanticMaxBonus +
+          interestSemanticSimilarity * this.interestSemanticMaxBonus;
 
         return {
           ...partner,
@@ -121,25 +130,41 @@ export class MatchingService {
           matchedLanguages: spokenMatches,
           mutualLearningMatches,
           commonCommunicationLanguages,
-          sharedInterests,
           sharedInterestedTags,
           sharedInterestedCourses,
           sharedStudyPrograms,
+          hobbySemanticSimilarity,
+          interestSemanticSimilarity,
         };
       })
+    );
+
+    const result = scoredPartners
       .filter((partner) => partner.matchedLanguages.length > 0)
       .sort((a, b) => b.matchScore - a.matchScore);
 
-    const matchingResults = scoredPartners.map((partner) => ({
-      partnerId: partner._id,
-      score: partner.matchScore,
-    }));
-
     await this.userModel.findByIdAndUpdate(userId, {
-      $set: { matchingResults },
+      $set: {
+        matchingResults: result.map((partner) => ({
+          partnerId: partner._id,
+          score: partner.matchScore,
+        })),
+      },
     });
 
-    return scoredPartners;
+    return result;
+  }
+
+  // Joins hobby tags into a single comma-separated string for SBERT
+  private buildHobbyText(hobbies?: string[]): string {
+    return (hobbies ?? []).filter(Boolean).join(", ");
+  }
+
+  // Combines the interests free-text and the overview bio into one string for SBERT
+  // interests may still be a legacy string[] in existing DB documents
+  private buildInterestText(interests?: string | string[], overview?: string): string {
+    const interestsStr = Array.isArray(interests) ? interests.join(", ") : interests;
+    return [interestsStr, overview].filter((s) => typeof s === "string" && s.trim().length > 0).join(" ").trim();
   }
 
   private getLearningLanguages(profile?: MatchingProfileLike): string[] {
@@ -209,25 +234,6 @@ export class MatchingService {
         };
       })
       .filter(Boolean);
-  }
-
-  private getSharedProfileInterests(
-    currentProfile?: MatchingProfileLike,
-    partnerProfile?: MatchingProfileLike
-  ): string[] {
-    const currentInterests = this.getProfileInterests(currentProfile);
-    const partnerInterests = new Set(this.getProfileInterests(partnerProfile));
-
-    return currentInterests.filter((interest) =>
-      partnerInterests.has(interest)
-    );
-  }
-
-  private getProfileInterests(profile?: MatchingProfileLike): string[] {
-    return this.uniqueNormalizedStrings([
-      ...(profile?.interests ?? []),
-      ...(profile?.hobbies ?? []),
-    ]);
   }
 
   private getSharedObjectIds(

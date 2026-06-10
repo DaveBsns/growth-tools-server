@@ -5,6 +5,7 @@ import { MatchingController } from './matching.controller';
 import { MatchingService } from './matching.service';
 import { MatchingStep2Controller } from './matching-step-2.controller';
 import { MatchingStep2Service } from './matching-step-2.service';
+import { SbertService } from './sbert.service';
 import { UserSchema } from '../users/user/schemas/user.schema';
 import { AuthModule } from '../auth/auth.module';
 import { AuthService } from '../auth/auth.service';
@@ -16,6 +17,6 @@ import { AuthService } from '../auth/auth.service';
     ConfigModule,
   ],
   controllers: [MatchingController, MatchingStep2Controller],
-  providers: [MatchingService, MatchingStep2Service, AuthService],
+  providers: [MatchingService, MatchingStep2Service, SbertService, AuthService],
 })
 export class MatchingModule {}

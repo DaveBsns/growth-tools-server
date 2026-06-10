@@ -22,5 +22,8 @@ export const configuration = () => ({
     },
     chatbot: {
         url: process.env.CHAT_BOT_ENDPOINT_URL
+    },
+    sbert: {
+        url: process.env.SBERT_SERVICE_URL || 'http://127.0.0.1:8001'
     }
 });

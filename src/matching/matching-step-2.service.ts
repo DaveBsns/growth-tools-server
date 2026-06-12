@@ -91,7 +91,7 @@ Analysiere die Profile der Kandidaten und vergleiche sie mit dem suchenden User.
 Berücksichtige: Sprachkombinationen, Freitextbeschreibungen, Hobbies, Interessen und Verfügbarkeit.
 Erstelle eine finale Rangfolge und eine kurze Begründung pro Kandidat.
 Antworte ausschließlich im folgenden JSON-Format:
-[{"partnerId": "...", "rank": 1, "llmSummary": "Kurze Begründung"}, ...]`;
+{"ranking": [{"partnerId": "...", "rank": 1, "llmSummary": "Kurze Begründung"}]}`;
 
     const userPrompt = `Suchender User:
 ${JSON.stringify(userProfile, null, 2)}

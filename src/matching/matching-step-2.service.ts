@@ -88,7 +88,7 @@ export class MatchingStep2Service {
 
     const systemPrompt = `Du bist ein Experte für Sprachlernpartner-Matching. 
 Analysiere die Profile der Kandidaten und vergleiche sie mit dem suchenden User.
-Berücksichtige: Sprachkombinationen, Freitextbeschreibungen, Hobbies, Interessen und Verfügbarkeit.
+Berücksichtige: Sprachkombinationen (Tandem-Potenzial sowie das Vorhandensein einer gemeinsamen Kommunikationssprache zur grundlegenden Verständigung), Freitextbeschreibungen, Hobbies, Interessen und Verfügbarkeit.
 Erstelle eine finale Rangfolge und eine kurze Begründung pro Kandidat.
 Antworte ausschließlich im folgenden JSON-Format:
 {"ranking": [{"partnerId": "...", "rank": 1, "llmSummary": "Kurze Begründung"}]}`;

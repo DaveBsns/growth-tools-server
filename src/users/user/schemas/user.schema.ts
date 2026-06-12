@@ -21,20 +21,14 @@ export class MatchingProfile {
     @Prop({ type: [String], default: [] })
     hobbies: string[];
 
-    @Prop({ type: [String], default: [] })
-    interests: string[];
+    @Prop({ required: false, type: String, maxlength: 500, default: null })
+    interests?: string;
 
     @Prop({ type: [LanguageSkillSchema], default: [] })
     spokenLanguages: LanguageSkill[];
 
     @Prop({ type: [LanguageSkillSchema], default: [] })
     learningLanguages: LanguageSkill[];
-
-    @Prop({ required: false })
-    motherTongue: string;
-
-    @Prop({ required: false })
-    learningLanguage: string;
 
     @Prop({ required: false })
     semester: number;

@@ -11,6 +11,8 @@ type MatchingProfileLike = {
   learningLanguages?: LanguageSkill[];
 };
 
+type PopulatedTag = { name: string } | null;
+
 type NormalizedLanguageSkill = {
   language: string;
   level: LanguageLevel;
@@ -26,12 +28,11 @@ export class MatchingService {
   ];
   private readonly communicationLanguageBonus = 10;
   private readonly mutualLearningBonus = 2;
-  private readonly sharedTagBonus = 2;
   private readonly sharedCourseBonus = 2;
   private readonly sharedStudyProgramBonus = 2;
   // SBERT similarity is 0..1; multiplied by these factors to keep impact low
-  private readonly hobbySemanticMaxBonus = 3;
-  private readonly interestSemanticMaxBonus = 2;
+  private readonly tagsAndHobbiesSemanticMaxBonus = 5;
+  private readonly freeTextSemanticMaxBonus = 5;
 
   private readonly levelScores: Record<LanguageLevel, number> = {
     A1: 1,
@@ -49,7 +50,11 @@ export class MatchingService {
   ) {}
 
   async findPotentialPartners(userId: string) {
-    const currentUser = await this.userModel.findById(userId).lean().exec();
+    const currentUser = await this.userModel
+      .findById(userId)
+      .populate<{ interestedTags: PopulatedTag[] }>("interestedTags")
+      .lean()
+      .exec();
 
     if (!currentUser || !currentUser.matchingProfile) {
       return [];
@@ -73,12 +78,18 @@ export class MatchingService {
           level: { $in: this.goodSpokenLevels },
         },
       },
-    }).lean().exec();
+    })
+      .populate<{ interestedTags: PopulatedTag[] }>("interestedTags")
+      .lean()
+      .exec();
 
     const currentSpokenLanguages = this.getSpokenLanguages(currentProfile);
     const currentCommunicationLanguages = this.getGoodSpokenLanguageSkills(currentProfile);
-    const currentHobbyText = this.buildHobbyText(currentProfile.hobbies);
-    const currentInterestText = this.buildInterestText(currentProfile.interests, currentUser.overview);
+    const currentTagsAndHobbiesText = this.buildTagsAndHobbiesText(
+      currentProfile.hobbies,
+      currentUser.interestedTags
+    );
+    const currentFreeText = this.buildFreeText(currentProfile.interests, currentUser.overview);
 
     const scoredPartners = await Promise.all(
       potentialPartners.map(async (partner) => {
@@ -93,10 +104,6 @@ export class MatchingService {
           currentCommunicationLanguages,
           this.getGoodSpokenLanguageSkills(partnerProfile)
         );
-        const sharedInterestedTags = this.getSharedObjectIds(
-          currentUser.interestedTags,
-          partner.interestedTags
-        );
         const sharedInterestedCourses = this.getSharedObjectIds(
           currentUser.interestedCourses,
           partner.interestedCourses
@@ -106,23 +113,25 @@ export class MatchingService {
           partner.studyPrograms
         );
 
-        const partnerHobbyText = this.buildHobbyText(partnerProfile.hobbies);
-        const partnerInterestText = this.buildInterestText(partnerProfile.interests, partner.overview);
+        const partnerTagsAndHobbiesText = this.buildTagsAndHobbiesText(
+          partnerProfile.hobbies,
+          partner.interestedTags
+        );
+        const partnerFreeText = this.buildFreeText(partnerProfile.interests, partner.overview);
 
-        const [hobbySemanticSimilarity, interestSemanticSimilarity] = await Promise.all([
-          this.sbertService.computeSimilarity(currentHobbyText, partnerHobbyText),
-          this.sbertService.computeSimilarity(currentInterestText, partnerInterestText),
+        const [tagsAndHobbiesSemanticSimilarity, freeTextSemanticSimilarity] = await Promise.all([
+          this.sbertService.computeSimilarity(currentTagsAndHobbiesText, partnerTagsAndHobbiesText),
+          this.sbertService.computeSimilarity(currentFreeText, partnerFreeText),
         ]);
 
         const score =
           spokenMatches.reduce((sum, match) => sum + this.levelScores[match.level], 0) +
           mutualLearningMatches.length * this.mutualLearningBonus +
           (commonCommunicationLanguages.length > 0 ? this.communicationLanguageBonus : 0) +
-          sharedInterestedTags.length * this.sharedTagBonus +
           sharedInterestedCourses.length * this.sharedCourseBonus +
           sharedStudyPrograms.length * this.sharedStudyProgramBonus +
-          hobbySemanticSimilarity * this.hobbySemanticMaxBonus +
-          interestSemanticSimilarity * this.interestSemanticMaxBonus;
+          tagsAndHobbiesSemanticSimilarity * this.tagsAndHobbiesSemanticMaxBonus +
+          freeTextSemanticSimilarity * this.freeTextSemanticMaxBonus;
 
         return {
           ...partner,
@@ -130,11 +139,10 @@ export class MatchingService {
           matchedLanguages: spokenMatches,
           mutualLearningMatches,
           commonCommunicationLanguages,
-          sharedInterestedTags,
           sharedInterestedCourses,
           sharedStudyPrograms,
-          hobbySemanticSimilarity,
-          interestSemanticSimilarity,
+          tagsAndHobbiesSemanticSimilarity,
+          freeTextSemanticSimilarity,
         };
       })
     );
@@ -155,16 +163,26 @@ export class MatchingService {
     return result;
   }
 
-  // Joins hobby tags into a single comma-separated string for SBERT
-  private buildHobbyText(hobbies?: string[]): string {
-    return (hobbies ?? []).filter(Boolean).join(", ");
+  // Combines hobby tags and interestedTags into one text
+  private buildTagsAndHobbiesText(
+    hobbies?: string[],
+    interestedTags?: PopulatedTag[]
+  ): string {
+    const hobbyParts = (hobbies ?? []).filter(Boolean);
+    const tagParts = (interestedTags ?? [])
+      .map((tag) => tag?.name)
+      .filter(Boolean);
+    return [...hobbyParts, ...tagParts].join(", ");
   }
 
   // Combines the interests free-text and the overview bio into one string for SBERT
   // interests may still be a legacy string[] in existing DB documents
-  private buildInterestText(interests?: string | string[], overview?: string): string {
+  private buildFreeText(interests?: string | string[], overview?: string): string {
     const interestsStr = Array.isArray(interests) ? interests.join(", ") : interests;
-    return [interestsStr, overview].filter((s) => typeof s === "string" && s.trim().length > 0).join(" ").trim();
+    return [interestsStr, overview]
+      .filter((s) => typeof s === "string" && s.trim().length > 0)
+      .join(" ")
+      .trim();
   }
 
   private getLearningLanguages(profile?: MatchingProfileLike): string[] {

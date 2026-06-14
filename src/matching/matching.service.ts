@@ -27,7 +27,6 @@ export class MatchingService {
     "native",
   ];
   private readonly communicationLanguageBonus = 10;
-  private readonly mutualLearningBonus = 2;
   private readonly sharedCourseBonus = 2;
   private readonly sharedStudyProgramBonus = 2;
   // SBERT similarity is 0..1; multiplied by these factors to keep impact low
@@ -62,9 +61,34 @@ export class MatchingService {
 
     const currentProfile = currentUser.matchingProfile as MatchingProfileLike;
     const languagesToLearn = this.getLearningLanguages(currentProfile);
+    const currentGoodSpokenSkills = this.getGoodSpokenLanguageSkills(currentProfile);
+    const currentGoodSpokenLanguages = currentGoodSpokenSkills.map((skill) => skill.language);
 
-    if (languagesToLearn.length === 0) {
+    // No tandem possible if the user neither wants to learn a language
+    // nor speaks any language well enough to teach it.
+    if (languagesToLearn.length === 0 && currentGoodSpokenLanguages.length === 0) {
       return [];
+    }
+
+    const partnerLanguageConditions = [];
+
+    // Direction 1: partner speaks a language the current user wants to learn
+    if (languagesToLearn.length > 0) {
+      partnerLanguageConditions.push({
+        "matchingProfile.spokenLanguages": {
+          $elemMatch: {
+            language: { $in: languagesToLearn },
+            level: { $in: this.goodSpokenLevels },
+          },
+        },
+      });
+    }
+
+    // Direction 2: partner wants to learn a language the current user speaks well
+    if (currentGoodSpokenLanguages.length > 0) {
+      partnerLanguageConditions.push({
+        "matchingProfile.learningLanguages.language": { $in: currentGoodSpokenLanguages },
+      });
     }
 
     const potentialPartners = await this.userModel.find({
@@ -72,18 +96,12 @@ export class MatchingService {
       status: true,
       softDeleted: false,
       isBlockedByAdmin: false,
-      "matchingProfile.spokenLanguages": {
-        $elemMatch: {
-          language: { $in: languagesToLearn },
-          level: { $in: this.goodSpokenLevels },
-        },
-      },
+      $or: partnerLanguageConditions,
     })
       .populate<{ interestedTags: PopulatedTag[] }>("interestedTags")
       .lean()
       .exec();
 
-    const currentSpokenLanguages = this.getSpokenLanguages(currentProfile);
     const currentCommunicationLanguages = this.getGoodSpokenLanguageSkills(currentProfile);
     const currentTagsAndHobbiesText = this.buildTagsAndHobbiesText(
       currentProfile.hobbies,
@@ -95,10 +113,15 @@ export class MatchingService {
       potentialPartners.map(async (partner) => {
         const partnerProfile = partner.matchingProfile as MatchingProfileLike;
 
+        // Direction 1: partner can teach the current user (speaks a language to learn)
         const spokenMatches = this.getGoodSpokenLanguageMatches(partnerProfile, languagesToLearn);
 
-        const mutualLearningMatches = this.getLearningLanguages(partnerProfile)
-          .filter((language) => currentSpokenLanguages.includes(language));
+        // Direction 2: current user can teach the partner (partner learns a language the user speaks well).
+        // Scored by the current user's own level in that language, mirroring direction 1.
+        const partnerLanguagesToLearn = this.getLearningLanguages(partnerProfile);
+        const teachableLanguages = currentGoodSpokenSkills.filter((skill) =>
+          partnerLanguagesToLearn.includes(skill.language)
+        );
 
         const commonCommunicationLanguages = this.getCommonCommunicationLanguages(
           currentCommunicationLanguages,
@@ -126,7 +149,7 @@ export class MatchingService {
 
         const score =
           spokenMatches.reduce((sum, match) => sum + this.levelScores[match.level], 0) +
-          mutualLearningMatches.length * this.mutualLearningBonus +
+          teachableLanguages.reduce((sum, skill) => sum + this.levelScores[skill.level], 0) +
           (commonCommunicationLanguages.length > 0 ? this.communicationLanguageBonus : 0) +
           sharedInterestedCourses.length * this.sharedCourseBonus +
           sharedStudyPrograms.length * this.sharedStudyProgramBonus +
@@ -137,7 +160,7 @@ export class MatchingService {
           ...partner,
           matchScore: score,
           matchedLanguages: spokenMatches,
-          mutualLearningMatches,
+          teachableLanguages,
           commonCommunicationLanguages,
           sharedInterestedCourses,
           sharedStudyPrograms,
@@ -148,7 +171,10 @@ export class MatchingService {
     );
 
     const result = scoredPartners
-      .filter((partner) => partner.matchedLanguages.length > 0)
+      .filter(
+        (partner) =>
+          partner.matchedLanguages.length > 0 || partner.teachableLanguages.length > 0
+      )
       .sort((a, b) => b.matchScore - a.matchScore);
 
     await this.userModel.findByIdAndUpdate(userId, {
@@ -190,10 +216,6 @@ export class MatchingService {
     return this.uniqueNormalizedLanguages(languages);
   }
 
-  private getSpokenLanguages(profile?: MatchingProfileLike): string[] {
-    const languages = (profile?.spokenLanguages ?? []).map(({ language }) => language);
-    return this.uniqueNormalizedLanguages(languages);
-  }
 
   private getGoodSpokenLanguageMatches(
     profile: MatchingProfileLike,

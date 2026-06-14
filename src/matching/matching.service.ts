@@ -109,66 +109,91 @@ export class MatchingService {
     );
     const currentFreeText = this.buildFreeText(currentProfile.interests, currentUser.overview);
 
-    const scoredPartners = await Promise.all(
-      potentialPartners.map(async (partner) => {
-        const partnerProfile = partner.matchingProfile as MatchingProfileLike;
+    // Phase 1: compute all non-semantic data per partner and collect the text
+    // pairs that need a semantic comparison. No SBERT calls happen here yet.
+    const partnerData = potentialPartners.map((partner) => {
+      const partnerProfile = partner.matchingProfile as MatchingProfileLike;
 
-        // Direction 1: partner can teach the current user (speaks a language to learn)
-        const spokenMatches = this.getGoodSpokenLanguageMatches(partnerProfile, languagesToLearn);
+      // Direction 1: partner can teach the current user (speaks a language to learn)
+      const spokenMatches = this.getGoodSpokenLanguageMatches(partnerProfile, languagesToLearn);
 
-        // Direction 2: current user can teach the partner (partner learns a language the user speaks well).
-        // Scored by the current user's own level in that language, mirroring direction 1.
-        const partnerLanguagesToLearn = this.getLearningLanguages(partnerProfile);
-        const teachableLanguages = currentGoodSpokenSkills.filter((skill) =>
-          partnerLanguagesToLearn.includes(skill.language)
-        );
+      // Direction 2: current user can teach the partner (partner learns a language the user speaks well).
+      // Scored by the current user's own level in that language, mirroring direction 1.
+      const partnerLanguagesToLearn = this.getLearningLanguages(partnerProfile);
+      const teachableLanguages = currentGoodSpokenSkills.filter((skill) =>
+        partnerLanguagesToLearn.includes(skill.language)
+      );
 
-        const commonCommunicationLanguages = this.getCommonCommunicationLanguages(
-          currentCommunicationLanguages,
-          this.getGoodSpokenLanguageSkills(partnerProfile)
-        );
-        const sharedInterestedCourses = this.getSharedObjectIds(
-          currentUser.interestedCourses,
-          partner.interestedCourses
-        );
-        const sharedStudyPrograms = this.getSharedObjectIds(
-          currentUser.studyPrograms,
-          partner.studyPrograms
-        );
+      const commonCommunicationLanguages = this.getCommonCommunicationLanguages(
+        currentCommunicationLanguages,
+        this.getGoodSpokenLanguageSkills(partnerProfile)
+      );
+      const sharedInterestedCourses = this.getSharedObjectIds(
+        currentUser.interestedCourses,
+        partner.interestedCourses
+      );
+      const sharedStudyPrograms = this.getSharedObjectIds(
+        currentUser.studyPrograms,
+        partner.studyPrograms
+      );
 
-        const partnerTagsAndHobbiesText = this.buildTagsAndHobbiesText(
+      return {
+        partner,
+        spokenMatches,
+        teachableLanguages,
+        commonCommunicationLanguages,
+        sharedInterestedCourses,
+        sharedStudyPrograms,
+        tagsAndHobbiesText: this.buildTagsAndHobbiesText(
           partnerProfile.hobbies,
           partner.interestedTags
-        );
-        const partnerFreeText = this.buildFreeText(partnerProfile.interests, partner.overview);
+        ),
+        freeText: this.buildFreeText(partnerProfile.interests, partner.overview),
+      };
+    });
 
-        const [tagsAndHobbiesSemanticSimilarity, freeTextSemanticSimilarity] = await Promise.all([
-          this.sbertService.computeSimilarity(currentTagsAndHobbiesText, partnerTagsAndHobbiesText),
-          this.sbertService.computeSimilarity(currentFreeText, partnerFreeText),
-        ]);
+    // Phase 2: one batch request per semantic dimension instead of 2 calls per partner.
+    const [tagsAndHobbiesScores, freeTextScores] = await Promise.all([
+      this.sbertService.computeSimilarities(
+        partnerData.map((data) => ({
+          a: currentTagsAndHobbiesText,
+          b: data.tagsAndHobbiesText,
+        }))
+      ),
+      this.sbertService.computeSimilarities(
+        partnerData.map((data) => ({
+          a: currentFreeText,
+          b: data.freeText,
+        }))
+      ),
+    ]);
 
-        const score =
-          spokenMatches.reduce((sum, match) => sum + this.levelScores[match.level], 0) +
-          teachableLanguages.reduce((sum, skill) => sum + this.levelScores[skill.level], 0) +
-          (commonCommunicationLanguages.length > 0 ? this.communicationLanguageBonus : 0) +
-          sharedInterestedCourses.length * this.sharedCourseBonus +
-          sharedStudyPrograms.length * this.sharedStudyProgramBonus +
-          tagsAndHobbiesSemanticSimilarity * this.tagsAndHobbiesSemanticMaxBonus +
-          freeTextSemanticSimilarity * this.freeTextSemanticMaxBonus;
+    // Phase 3: combine the quantitative scores with the semantic batch results.
+    const scoredPartners = partnerData.map((data, index) => {
+      const tagsAndHobbiesSemanticSimilarity = tagsAndHobbiesScores[index] ?? 0;
+      const freeTextSemanticSimilarity = freeTextScores[index] ?? 0;
 
-        return {
-          ...partner,
-          matchScore: score,
-          matchedLanguages: spokenMatches,
-          teachableLanguages,
-          commonCommunicationLanguages,
-          sharedInterestedCourses,
-          sharedStudyPrograms,
-          tagsAndHobbiesSemanticSimilarity,
-          freeTextSemanticSimilarity,
-        };
-      })
-    );
+      const score =
+        data.spokenMatches.reduce((sum, match) => sum + this.levelScores[match.level], 0) +
+        data.teachableLanguages.reduce((sum, skill) => sum + this.levelScores[skill.level], 0) +
+        (data.commonCommunicationLanguages.length > 0 ? this.communicationLanguageBonus : 0) +
+        data.sharedInterestedCourses.length * this.sharedCourseBonus +
+        data.sharedStudyPrograms.length * this.sharedStudyProgramBonus +
+        tagsAndHobbiesSemanticSimilarity * this.tagsAndHobbiesSemanticMaxBonus +
+        freeTextSemanticSimilarity * this.freeTextSemanticMaxBonus;
+
+      return {
+        ...data.partner,
+        matchScore: score,
+        matchedLanguages: data.spokenMatches,
+        teachableLanguages: data.teachableLanguages,
+        commonCommunicationLanguages: data.commonCommunicationLanguages,
+        sharedInterestedCourses: data.sharedInterestedCourses,
+        sharedStudyPrograms: data.sharedStudyPrograms,
+        tagsAndHobbiesSemanticSimilarity,
+        freeTextSemanticSimilarity,
+      };
+    });
 
     const result = scoredPartners
       .filter(

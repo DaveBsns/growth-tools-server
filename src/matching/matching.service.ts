@@ -6,7 +6,8 @@ import { SbertService } from "./sbert.service";
 
 type MatchingProfileLike = {
   hobbies?: string[];
-  interests?: string;
+  // interests?: string;
+  interests?: string[];
   spokenLanguages?: LanguageSkill[];
   learningLanguages?: LanguageSkill[];
 };

@@ -21,8 +21,8 @@ export class MatchingProfile {
     @Prop({ type: [String], default: [] })
     hobbies: string[];
 
-    @Prop({ required: false, type: String, maxlength: 500, default: null })
-    interests?: string;
+    @Prop({ required: false, type: [String], maxlength: 500, default: null })
+    interests?: string[];
 
     @Prop({ type: [LanguageSkillSchema], default: [] })
     spokenLanguages: LanguageSkill[];
